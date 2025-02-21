@@ -4,7 +4,7 @@ import time
 import sys
 import urllib.request
 from multiprocessing.dummy import Pool
-
+import threading
 import random
 
 import logging
@@ -28,7 +28,7 @@ def request_video(url, referer=''):
 
     logging.info('Requesting {}'.format(url))
     try:
-        response = urllib.request.urlopen(request, timeout=10)  # Set timeout to 10 seconds
+        response = urllib.request.urlopen(request, timeout=8)  # Set timeout to 8 seconds
         data = response.read() # if successful, read the data
         return data
     except urllib.error.HTTPError as e:
@@ -46,7 +46,7 @@ def save_video(data, saveto):
         f.write(data)
 
     # please be nice to the host - take pauses and avoid spamming
-    time.sleep(random.uniform(0.5, 1.5))
+    time.sleep(random.uniform(0.5, 0.8))
 
 
 def download_youtube(url, dirname, video_id):
@@ -71,7 +71,7 @@ def download_aslpro(url, dirname, video_id):
 def download_others(url, dirname, video_id):
     saveto = os.path.join(dirname, '{}.mp4'.format(video_id))
     if os.path.exists(saveto):
-        logging.info('{} exists at {}'.format(video_id, saveto))
+        logging.info('{} exists at {}'.format(video_id, saveto)) 
         return 
     
     data = request_video(url)
@@ -91,33 +91,35 @@ def select_download_method(url):
         return download_others
 
 
-def download_nonyt_videos(indexfile, saveto='raw_videos'):
-    content = json.load(open(indexfile))
-
-    if not os.path.exists(saveto):
-        os.mkdir(saveto)
-
-    for entry in content:
-        gloss = entry['gloss']
-        instances = entry['instances']
-
-        for inst in instances:
+def download_nonyt_videos(inst, saveto='raw_videos'):
             video_url = inst['url']
             video_id = inst['video_id']
             
-            logging.info('gloss: {}, video: {}.'.format(gloss, video_id))
+            logging.info('video: {}.'.format(video_id))
 
             download_method = select_download_method(video_url)    
             
             if download_method == download_youtube:
                 logging.warning('Skipping YouTube video {}'.format(video_id))
-                continue
+                return
 
             try:
                 download_method(video_url, saveto, video_id)
             except Exception as e:
                 logging.error('Unsuccessful downloading - video {}'.format(video_id))
 
+def download_nonyt_videos_multiple(saveto, MAX_THREADS=12) :
+    content = json.load(open('WLASL_v0.3.json'))
+    if not os.path.exists(saveto):
+        os.mkdir(saveto)
+
+    # Extract all YouTube video instances
+    yt_instances = [
+        inst for entry in content for inst in entry['instances']
+        if 'youtube' not in inst['url'] and 'youtu.be' not in inst['url']
+    ]
+    with Pool(MAX_THREADS) as pool:
+        pool.starmap(download_nonyt_videos, [(inst, saveto) for inst in yt_instances])
 
 def check_youtube_dl_version():
     ver = os.popen(f'{youtube_downloader} --version').read()
@@ -125,46 +127,56 @@ def check_youtube_dl_version():
     assert ver, f"{youtube_downloader} cannot be found in PATH. Please verify your installation."
 
 
-def download_yt_videos(indexfile, saveto='raw_videos'):
-    content = json.load(open(indexfile))
+def download_yt_videos(inst, saveto='raw_videos'):
+    video_url = inst['url']
+    video_id = inst['video_id']
+
+    if 'youtube' not in video_url and 'youtu.be' not in video_url:
+        return
+
+    if os.path.exists(os.path.join(saveto, video_url[-11:] + '.mp4')) or os.path.exists(os.path.join(saveto, video_url[-11:] + '.mkv')):
+        logging.info('YouTube videos {} already exists.'.format(video_url))
+        return
     
+    else:
+        cmd = f"{youtube_downloader} \"{{}}\" -o \"{{}}%(id)s.%(ext)s\""
+        cmd = cmd.format(video_url, saveto + os.path.sep)
+
+        rv = os.system(cmd)
+                
+        if not rv:
+            logging.info('Finish downloading youtube video url {}'.format(video_url))
+        else:
+            logging.error('Unsuccessful downloading - youtube video url {}'.format(video_url))
+
+        time.sleep(random.uniform(1.0, 1.5))
+
+def download_ytvideo_multiple(saveto, MAX_THREADS=12) :
+    content = json.load(open('WLASL_v0.3.json'))
     if not os.path.exists(saveto):
         os.mkdir(saveto)
-    
-    for entry in content:
-        gloss = entry['gloss']
-        instances = entry['instances']
 
-        for inst in instances:
-            video_url = inst['url']
-            video_id = inst['video_id']
+    # Extract all YouTube video instances
+    yt_instances = [
+        inst for entry in content for inst in entry['instances']
+        if 'youtube' in inst['url'] or 'youtu.be' in inst['url']
+    ]
 
-            if 'youtube' not in video_url and 'youtu.be' not in video_url:
-                continue
-
-            if os.path.exists(os.path.join(saveto, video_url[-11:] + '.mp4')) or os.path.exists(os.path.join(saveto, video_url[-11:] + '.mkv')):
-                logging.info('YouTube videos {} already exists.'.format(video_url))
-                continue
-            else:
-                cmd = f"{youtube_downloader} \"{{}}\" -o \"{{}}%(id)s.%(ext)s\""
-                cmd = cmd.format(video_url, saveto + os.path.sep)
-
-                rv = os.system(cmd)
-                
-                if not rv:
-                    logging.info('Finish downloading youtube video url {}'.format(video_url))
-                else:
-                    logging.error('Unsuccessful downloading - youtube video url {}'.format(video_url))
-
-                # please be nice to the host - take pauses and avoid spamming
-                time.sleep(random.uniform(1.0, 1.5))
-    
+    # Use a thread pool to download videos concurrently
+    with Pool(MAX_THREADS) as pool:
+        pool.starmap(download_yt_videos, [(inst, saveto) for inst in yt_instances])
 
 if __name__ == '__main__':
-    logging.info('Start downloading non-youtube videos.')
-    download_nonyt_videos('WLASL_v0.3.json')
-
     check_youtube_dl_version()
     logging.info('Start downloading youtube videos.')
-    download_yt_videos('WLASL_v0.3.json')
+    
+    thread_nonyt = threading.Thread(target=download_nonyt_videos_multiple, args=('raw_videos',))
+    thread_yt = threading.Thread(target=download_ytvideo_multiple, args=('raw_videos',))
 
+    thread_yt.start()
+    thread_nonyt.start()
+
+    thread_yt.join()
+    thread_nonyt.join()
+
+    print("FINISH..........................")

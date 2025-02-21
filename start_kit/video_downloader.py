@@ -27,10 +27,18 @@ def request_video(url, referer=''):
     request = urllib.request.Request(url, None, headers)  # The assembled request
 
     logging.info('Requesting {}'.format(url))
-    response = urllib.request.urlopen(request)
-    data = response.read()  # The data you need
+    try:
+        response = urllib.request.urlopen(request, timeout=10)  # Set timeout to 10 seconds
+        data = response.read() # if successful, read the data
+        return data
+    except urllib.error.HTTPError as e:
+        logging.error(f"HTTP Error {e.code} - {url}: {e.reason}")
+    except urllib.error.URLError as e:
+        logging.error(f"URL Error - {url}: {e.reason}")
+    except Exception as e:
+        logging.error(f"Unexpected error for {url}: {str(e)}")
 
-    return data
+    return None  # Return None if request fails
 
 
 def save_video(data, saveto):
@@ -52,6 +60,11 @@ def download_aslpro(url, dirname, video_id):
         return 
 
     data = request_video(url, referer='http://www.aslpro.com/cgi-bin/aslpro/aslpro.cgi')
+
+    if data is None:
+        logging.warning(f"Skipping {video_id} due to inaccessible URL")
+        return
+
     save_video(data, saveto)
 
 
@@ -62,6 +75,10 @@ def download_others(url, dirname, video_id):
         return 
     
     data = request_video(url)
+    if data is None: 
+        logging.warning(f"Skipping {video_id} due to inaccessible URL")
+        return
+
     save_video(data, saveto)
 
 

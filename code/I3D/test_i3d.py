@@ -76,13 +76,13 @@ def run(init_lr=0.1,
     # setup the model
     if mode == 'flow':
         i3d = InceptionI3d(400, in_channels=2)
-        i3d.load_state_dict(torch.load('weights/flow_imagenet.pt'))
+        i3d.load_state_dict(torch.load('weights/flow_imagenet.pt', map_location=torch.device('cpu')))
     else:
         i3d = InceptionI3d(400, in_channels=3)
-        i3d.load_state_dict(torch.load('weights/rgb_imagenet.pt'))
+        i3d.load_state_dict(torch.load('weights/rgb_imagenet.pt', map_location=torch.device('cpu')))
+
     i3d.replace_logits(num_classes)
-    i3d.load_state_dict(torch.load(weights))  # nslt_2000_000700.pt nslt_1000_010800 nslt_300_005100.pt(best_results)  nslt_300_005500.pt(results_reported) nslt_2000_011400
-    i3d.cuda()
+    i3d.load_state_dict(torch.load(weights, map_location=torch.device('cpu')))  # Load model on CPU
     i3d = nn.DataParallel(i3d)
     i3d.eval()
 
@@ -90,14 +90,14 @@ def run(init_lr=0.1,
     correct_5 = 0
     correct_10 = 0
 
-    top1_fp = np.zeros(num_classes, dtype=np.int)
-    top1_tp = np.zeros(num_classes, dtype=np.int)
+    top1_fp = np.zeros(num_classes, dtype=int)
+    top1_tp = np.zeros(num_classes, dtype=int)
 
-    top5_fp = np.zeros(num_classes, dtype=np.int)
-    top5_tp = np.zeros(num_classes, dtype=np.int)
+    top5_fp = np.zeros(num_classes, dtype=int)
+    top5_tp = np.zeros(num_classes, dtype=int)
 
-    top10_fp = np.zeros(num_classes, dtype=np.int)
-    top10_tp = np.zeros(num_classes, dtype=np.int)
+    top10_fp = np.zeros(num_classes, dtype=int)
+    top10_tp = np.zeros(num_classes, dtype=int)
 
     for data in dataloaders["test"]:
         inputs, labels, video_id = data  # inputs: b, c, t, h, w
@@ -127,9 +127,10 @@ def run(init_lr=0.1,
               float(correct_10) / len(dataloaders["test"]))
 
         # per-class accuracy
-    top1_per_class = np.mean(top1_tp / (top1_tp + top1_fp))
-    top5_per_class = np.mean(top5_tp / (top5_tp + top5_fp))
-    top10_per_class = np.mean(top10_tp / (top10_tp + top10_fp))
+    top1_per_class = np.mean(np.where((top1_tp + top1_fp) > 0, top1_tp / (top1_tp + top1_fp), 0))
+    top5_per_class = np.mean(np.where((top5_tp + top5_fp) > 0, top5_tp / (top5_tp + top5_fp), 0))
+    top10_per_class = np.mean(np.where((top10_tp + top10_fp) > 0, top10_tp / (top10_tp + top10_fp), 0))
+
     print('top-k average per class acc: {}, {}, {}'.format(top1_per_class, top5_per_class, top10_per_class))
 
 
@@ -164,14 +165,14 @@ def ensemble(mode, root, train_split, weights, num_classes):
     correct_10 = 0
     # confusion_matrix = np.zeros((num_classes,num_classes), dtype=np.int)
 
-    top1_fp = np.zeros(num_classes, dtype=np.int)
-    top1_tp = np.zeros(num_classes, dtype=np.int)
+    top1_fp = np.zeros(num_classes, dtype=int)
+    top1_tp = np.zeros(num_classes, dtype=int)
 
-    top5_fp = np.zeros(num_classes, dtype=np.int)
-    top5_tp = np.zeros(num_classes, dtype=np.int)
+    top5_fp = np.zeros(num_classes, dtype=int)
+    top5_tp = np.zeros(num_classes, dtype=int)
 
-    top10_fp = np.zeros(num_classes, dtype=np.int)
-    top10_tp = np.zeros(num_classes, dtype=np.int)
+    top10_fp = np.zeros(num_classes, dtype=int)
+    top10_tp = np.zeros(num_classes, dtype=int)
 
     for data in dataloaders["test"]:
         inputs, labels, video_id = data  # inputs: b, c, t, h, w
@@ -261,12 +262,12 @@ if __name__ == '__main__':
     # ================== test i3d on a dataset ==============
     # need to add argparse
     mode = 'rgb'
-    num_classes = 2000
+    num_classes = 100
     save_model = './checkpoints/'
 
-    root = '../../data/WLASL2000'
+    root = '../../data/WLASL{}'.format(num_classes)
 
     train_split = 'preprocess/nslt_{}.json'.format(num_classes)
-    weights = 'archived/asl2000/FINAL_nslt_2000_iters=5104_top1=32.48_top5=57.31_top10=66.31.pt'
+    weights = 'archived/asl100/FINAL_nslt_100_iters=896_top1=65.89_top5=84.11_top10=89.92.pt' #Change the path whenever changing subset.
 
     run(mode=mode, root=root, save_model=save_model, train_split=train_split, weights=weights)

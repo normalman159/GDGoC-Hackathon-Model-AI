@@ -8,6 +8,9 @@ start_kit/videos/
 code/I3D/archived/
 *.pt
 
+__pycache__/
 *.zip
 
 env/
+
+data/

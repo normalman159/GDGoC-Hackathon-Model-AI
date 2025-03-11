@@ -27,12 +27,16 @@ def load_rgb_frames_from_video(vid_root, vid, start, num):
     vidcap = cv2.VideoCapture(video_path)
     # vidcap = cv2.VideoCapture('/home/dxli/Desktop/dm_256.mp4')
 
+    ret, img = vidcap.read()
+    if ret is None:
+        return None
+    
     frames = []
 
     vidcap.set(cv2.CAP_PROP_POS_FRAMES, start)
     for offset in range(num):
         success, img = vidcap.read()
-
+        if success is False: continue
         w, h, c = img.shape
         if w < 226 or h < 226:
             d = 226. - min(w, h)

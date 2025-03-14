@@ -1,5 +1,3 @@
-import os
-import argparse
 import cv2
 import mediapipe as mp
 import torch
@@ -36,7 +34,7 @@ def video_to_tensor(pic):
     return torch.from_numpy(pic.transpose([3, 0, 1, 2]))
 
 
-frames_1 = []
+# frames_1 = []
 test_transforms = transforms.Compose([videotransforms.CenterCrop(224)])
 
 def preprocess(frames) :
@@ -57,18 +55,22 @@ def preprocess(frames) :
 
 class Webcam(Dataset) :
     def __init__(self, transform=None, frames=None):
+        self.data = []
         self.frames = frames
+        self.data.append(frames)
         self.transform = transform
     
     def __len__(self):
-        return len(self.frames)
+        return 1
 
-    def __getitem__(self, index):        
-        frames = preprocess(self.frames)
-        imgs = self.transform(frames)
-        return video_to_tensor(imgs), None, None
+    def __getitem__(self, index):  
+        # frame = self.data[index]
+        frame = preprocess(frames=self.frames)
+        imgs = self.transform(frame)
+        return video_to_tensor(imgs)
 
-def open_camera(frames_1=frames_1) :
+def open_camera() :
+    frames_1 = []
     cap = cv2.VideoCapture(0)
     while True :
         ret, frame = cap.read()
@@ -81,30 +83,41 @@ def open_camera(frames_1=frames_1) :
             print("FIND HANDS!!!!!!!!!!!!!!!!!!!!!")
             frames_1.append(frame)
                 
-        elif len(frames_1) > 10:
+        elif len(frames_1) > 5:
             print("NO HANDS and detecting!!!!!!!!!!!", len(frames_1))
 
             val_dataset = Webcam(frames=frames_1, transform=test_transforms)
-            val_dataloader, a,b = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=2)
 
-            per_frame_logits = i3d(val_dataloader)
-            final_prediction_idx = torch.argmax(torch.mean(per_frame_logits, dim=2)).item()
+            print("CHECK POint 1!!!!!!!!!!!!!!")
 
-            print(final_prediction_idx)
+            val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=2, pin_memory=False)
+
+            print("CHECK POint 2!!!!!!!!!!!!!!")
+
+            data = {'test': val_dataloader}
+            print("CHECK POint 3!!!!!!!!!!!!!!")
+
+            for data in data["test"]:
+                inputs = data
+                if inputs == None : continue
+                per_frame_logits = i3d(inputs)
+                final_prediction_idx = torch.argmax(torch.mean(per_frame_logits, dim=2)).item()
+                print("Final prediction: {}".format(final_prediction_idx))
+            print("CHECK POint 4!!!!!!!!!!!!!!")
 
             frames_1 = []
 
         else:
             print("NO HANDS!!!!!!!!!!!!!!!!!!!!!", len(frames_1))
             frames_1 = []
-
+        
         cv2.imshow('frame', frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break         
 
 
 def main() :
-    open_camera(frames_1=frames_1)
+    open_camera()
 
 
 if __name__ == '__main__':

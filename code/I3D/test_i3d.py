@@ -39,10 +39,21 @@ def run(init_lr=0.1,
     test_transforms = transforms.Compose([videotransforms.CenterCrop(224)])
 
     val_dataset = Dataset(train_split, 'test', root, mode, test_transforms)
+
+    for i, data in enumerate(val_dataset) :
+        if i >= 1:
+            break
+        print(data[0].shape)
+        
+
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=1,
                                                  shuffle=False, num_workers=2,
                                                  pin_memory=False)
-
+    for i, batch in enumerate(val_dataloader):
+        if i >= 2:
+            break
+        print(batch[0].shape)
+        print(len(batch[0]))
     dataloaders = {'test': val_dataloader}
 
     # setup the model
@@ -59,14 +70,16 @@ def run(init_lr=0.1,
     i3d.to(compute_device)
     i3d.eval()
 
-    for data in dataloaders["test"]:
-        inputs, labels, video_id = data  # inputs: b, c, t, h, w
-        if inputs == None : continue
-        per_frame_logits = i3d(inputs)
+    
 
-        final_prediction_idx = torch.argmax(torch.mean(per_frame_logits, dim=2)).item()
+    # for data in dataloaders["test"]:
+    #     inputs, labels, video_id = data  # inputs: b, c, t, h, w
+    #     if inputs == None : continue
+    #     per_frame_logits = i3d(inputs)
 
-        print(video_id ,class_list[labels[0].item()], class_list[final_prediction_idx])
+    #     final_prediction_idx = torch.argmax(torch.mean(per_frame_logits, dim=2)).item()
+
+    #     print(video_id ,class_list[labels[0].item()], class_list[final_prediction_idx])
 
 
 def run_on_tensor(weights, ip_tensor, num_classes):

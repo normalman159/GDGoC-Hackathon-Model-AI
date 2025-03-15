@@ -55,16 +55,13 @@ def preprocess(frames) :
 
 class Webcam(Dataset) :
     def __init__(self, transform=None, frames=None):
-        self.data = []
         self.frames = frames
-        self.data.append(frames)
         self.transform = transform
     
     def __len__(self):
         return 1
 
     def __getitem__(self, index):  
-        # frame = self.data[index]
         frame = preprocess(frames=self.frames)
         imgs = self.transform(frame)
         return video_to_tensor(imgs)
@@ -80,10 +77,10 @@ def open_camera() :
         hands_results = hands.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             
         if hands_results.multi_hand_landmarks:
-            print("FIND HANDS!!!!!!!!!!!!!!!!!!!!!")
+            print("FIND HANDS!!!!!!!!!!!!!!!!!!!!!", len(frames_1))
             frames_1.append(frame)
                 
-        elif len(frames_1) > 5:
+        elif len(frames_1) > 8:
             print("NO HANDS and detecting!!!!!!!!!!!", len(frames_1))
 
             val_dataset = Webcam(frames=frames_1, transform=test_transforms)
@@ -108,7 +105,6 @@ def open_camera() :
             frames_1 = []
 
         else:
-            print("NO HANDS!!!!!!!!!!!!!!!!!!!!!", len(frames_1))
             frames_1 = []
         
         cv2.imshow('frame', frame)
